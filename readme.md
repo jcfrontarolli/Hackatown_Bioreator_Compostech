@@ -5,17 +5,15 @@ Combina **sensores físicos (Arduino + YL-69 + ADS1115)**, **broker MQTT**, **AP
 
 ## Arquitetura do Sistema
 
-![Arquitetura do Sistema](docs/arquitetura.png)
-
-### 📚 Camadas principais
+### Camadas principais
 
 | Camada | Componente | Função |
 |--------|-------------|--------|
-| **1. Física (Hardware)** | `Sensor YL-69 + ADS1115` | Captura da umidade real do composto. |
-| **2. Coleta (Gateway)** | `dashboard.py` | Lê dados via Serial e publica em MQTT. |
-| **3. Backend (Servidor Flask)** | `app.py` + `data_source.py` | Fornece API REST e serve o dashboard. |
-| **4. Armazenamento Local** | `data.json` | Registra leituras de sensores. |
-| **5. Interface Web** | `dashboard.html` | Exibe gráficos e status em tempo real. |
+| 1. Física (Hardware) | `Sensor YL-69 + ADS1115` | Captura da umidade real do composto. |
+| 2. Coleta (Gateway) | `dashboard.py` | Lê dados via Serial e publica em MQTT. |
+| 3. Backend (Servidor Flask) | `app.py` + `data_source.py` | Fornece API REST e serve o dashboard. |
+| 4. Armazenamento Local | `data.json` | Registra leituras de sensores. |
+| 5. Interface Web | `dashboard.html` | Exibe gráficos e status em tempo real. |
 
 
 ## Instalação e Execução
@@ -49,4 +47,5 @@ O arquivo [`backend/dashboard.py`](backend/dashboard.py) lê dados da porta seri
 
 #### Ajuste a porta serial:
 ```python
+
 SERIAL_PORT = '/dev/ttyACM0'  # Ajuste conforme seu sistema
