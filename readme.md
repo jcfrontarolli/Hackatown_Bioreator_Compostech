@@ -27,7 +27,7 @@ Combina **sensores físicos (Arduino + YL-69 + ADS1115)**, **broker MQTT**, **AP
 
 ---
 
-### 🪫 1. Configuração do Arduino
+### 1. Configuração do Arduino
 
 1. Abra o arquivo [`hardware/Sensor-umidade-YL-69.cpp`](hardware/Sensor-umidade-YL-69.cpp) na **Arduino IDE**.
 2. Conecte o sensor YL-69 ao módulo **ADS1115**:
@@ -49,3 +49,4 @@ O arquivo [`backend/dashboard.py`](backend/dashboard.py) lê dados da porta seri
 ```python
 
 SERIAL_PORT = '/dev/ttyACM0'  # Ajuste conforme seu sistema
+
