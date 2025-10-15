@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8" />
+  <title>Dashboard de Sensores</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { font-family: sans-serif; margin: 20px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    canvas { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 10px; }
+  </style>
+</head>
+<body>
+  <h1>Dashboard de Sensores</h1>
+  <div class="grid">
+    <canvas id="chartUmidade"></canvas>
+    <canvas id="chartTemperatura"></canvas>
+  </div>
+
+  <script>
+    let chartUmidade, chartTemperatura;
+
+    async function fetchDados() {
+      const res = await fetch("/data");
+      if (!res.ok) throw new Error("Falha ao buscar dados");
+      return await res.json();
+    }
+
+    function initCharts(dados) {
+      const labels = dados.tempo;
+
+      const ctxUmi = document.getElementById("chartUmidade").getContext("2d");
+      chartUmidade = new Chart(ctxUmi, {
+        type: "line",
+        data: {
+          labels,
+          datasets: [{
+            label: "Umidade (%)",
+            data: dados.umidade,
+            borderColor: "green",
+            backgroundColor: "rgba(0,128,0,0.1)",
+            tension: 0.2
+          }]
+        },
+        options: {
+          responsive: true,
+          scales: { y: { beginAtZero: true } }
+        }
+      });
+
+      const ctxTemp = document.getElementById("chartTemperatura").getContext("2d");
+      chartTemperatura = new Chart(ctxTemp, {
+        type: "line",
+        data: {
+          labels,
+          datasets: [{
+            label: "Temperatura (°C)",
+            data: dados.temperatura,
+            borderColor: "red",
+            backgroundColor: "rgba(255,0,0,0.1)",
+            tension: 0.2
+          }]
+        },
+        options: {
+          responsive: true,
+          scales: { y: { beginAtZero: false } }
+        }
+      });
+    }
+
+    function updateCharts(dados) {
+      chartUmidade.data.labels = dados.tempo;
+      chartUmidade.data.datasets[0].data = dados.umidade;
+      chartUmidade.update();
+
+      chartTemperatura.data.labels = dados.tempo;
+      chartTemperatura.data.datasets[0].data = dados.temperatura;
+      chartTemperatura.update();
+    }
+
+    async function start() {
+      const dados = await fetchDados();
+      initCharts(dados);
+      setInterval(async () => {
+        try {
+          const novos = await fetchDados();
+          updateCharts(novos);
+        } catch (e) {
+          console.error(e);
+        }
+      }, 5000);
+    }
+
+    start();
+  </script>
+</body>
+</html>

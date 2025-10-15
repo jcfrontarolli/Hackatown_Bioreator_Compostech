@@ -1,0 +1,13 @@
+Compostech/
+├── hardware/
+│   └── Sensor-umidade-YL-69.cpp
+├── backend/
+│   ├── app.py
+│   ├── dashboard.py
+│   ├── data_source.py
+│   ├── data.json
+│   └── requirements.txt
+├── frontend/
+│   └── dashboard.html
+└── docs/
+    └── arquitetura.md
