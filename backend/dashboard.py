@@ -1,75 +1,84 @@
-import serial
-import json
+from flask import Flask, jsonify, render_template
+from threading import Thread, Lock
 import paho.mqtt.client as mqtt
 import time
 
-# Configurações
-SERIAL_PORT = '/dev/ttyUSB0'  # Verifique a porta do Arduino
-BAUD_RATE = 9600
-MQTT_BROKER = "localhost"
+app = Flask(__name__)
+
+# Dados globais e lock para concorrência segura
+sensor_data = {
+    "temperature": None,
+    "humidity": None,
+    "ph": None,
+    "gas": None,
+    "alerts": []
+}
+data_lock = Lock()
+
+MQTT_BROKER = "broker.hivemq.com"
 MQTT_PORT = 1883
-MQTT_PUB_DATA = "compostech/data"
-MQTT_SUB_CMD = "compostech/cmd"
+MQTT_TOPICS = [
+    ("compostech/data/temperature", 0),
+    ("compostech/data/humidity", 0),
+    ("compostech/data/ph", 0),
+    ("compostech/data/gas", 0),
+    ("compostech/alert/odor", 0),
+    ("compostech/alert/ph", 0)
+]
 
-ser = None  # Variável global para a serial
-
-# --- Funções MQTT ---
-def on_connect(client, userdata, flags, rc):
-    print("Conectado ao Broker MQTT com código de resultado:", rc)
-    client.subscribe(MQTT_SUB_CMD)
-
+# Callback MQTT ao receber mensagem
 def on_message(client, userdata, msg):
-    global ser
-    cmd = msg.payload.decode()
-    print(f"[MQTT] Comando recebido: {cmd}")
-    if ser and ser.is_open:
-        try:
-            ser.write(f"{cmd}\n".encode())
-            print(f"[SERIAL] Comando enviado ao Arduino: {cmd}")
-        except Exception as e:
-            print(f"[ERRO] Falha ao enviar comando Serial: {e}")
+    topic = msg.topic
+    payload = msg.payload.decode()
+    
+    with data_lock:
+        if topic == "compostech/data/temperature":
+            sensor_data["temperature"] = float(payload)
+        elif topic == "compostech/data/humidity":
+            sensor_data["humidity"] = float(payload)
+        elif topic == "compostech/data/ph":
+            sensor_data["ph"] = float(payload)
+        elif topic == "compostech/data/gas":
+            sensor_data["gas"] = int(payload)
+        elif topic == "compostech/alert/odor":
+            add_alert("Odor Alert: " + payload)
+        elif topic == "compostech/alert/ph":
+            add_alert("pH Alert: " + payload)
 
-# --- Inicializa MQTT ---
-client = mqtt.Client()
-client.on_connect = on_connect
-client.on_message = on_message
-client.connect(MQTT_BROKER, MQTT_PORT, 60)
-client.loop_start()
+def add_alert(message):
+    if message not in sensor_data["alerts"]:
+        sensor_data["alerts"].append(message)
 
-# --- Loop Principal ---
-while True:
-    try:
-        if ser is None or not ser.is_open:
-            try:
-                ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1)
-                print(f"[SERIAL] Conectado em {SERIAL_PORT} @ {BAUD_RATE}")
-            except serial.SerialException as e:
-                print(f"[ERRO] Porta serial indisponível: {e}")
-                time.sleep(5)
-                continue
+def clear_alerts():
+    sensor_data["alerts"].clear()
 
-        line = ser.readline().decode('utf-8').strip()
-        if line:
-            if line.startswith('{') and line.endswith('}'):
-                try:
-                    data = json.loads(line)
-                    print(f"[DADOS] {data}")
-                    client.publish(MQTT_PUB_DATA, json.dumps(data), qos=1, retain=True)
-                except json.JSONDecodeError:
-                    print(f"[ERRO] JSON inválido: {line}")
-            else:
-                print(f"[DEBUG] {line}")
+# Thread para gerenciar conexão MQTT e loop
+def mqtt_thread():
+    client = mqtt.Client()
+    client.on_message = on_message
+    client.connect(MQTT_BROKER, MQTT_PORT, 60)
+    client.subscribe(MQTT_TOPICS)
+    client.loop_forever()
 
-        time.sleep(0.05)
+@app.route('/')
+def index():
+    return render_template('dashboard.html')
 
-    except KeyboardInterrupt:
-        print("Encerrando...")
-        break
-    except Exception as e:
-        print(f"[ERRO] Inesperado: {e}")
-        time.sleep(2)
+@app.route('/api/sensordata')
+def api_sensordata():
+    with data_lock:
+        data_copy = sensor_data.copy()
+    return jsonify(data_copy)
 
-# --- Finalização ---
-if ser and ser.is_open:
-    ser.close()
-client.loop_stop()
+@app.route('/api/clearalerts', methods=['POST'])
+def api_clearalerts():
+    with data_lock:
+        clear_alerts()
+    return jsonify({"status": "alerts cleared"})
+
+if __name__ == "__main__":
+    # Inicializa thread do MQTT para receber dados em background
+    t = Thread(target=mqtt_thread)
+    t.start()
+    # Inicializa Flask (debug=False para produção)
+    app.run(host='0.0.0.0', port=5000, debug=False)
