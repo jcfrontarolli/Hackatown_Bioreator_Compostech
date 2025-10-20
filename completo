@@ -1,0 +1,299 @@
+#include <WiFi.h>
+#include <PubSubClient.h>
+#include <OneWire.h>
+#include <DallasTemperature.h>
+#include <DHT.h>
+#include <Adafruit_ADS1X15.h>
+#include <LiquidCrystal_I2C.h>
+#include <Wire.h>
+#include <VL53L0X.h>
+
+// --- Definições pinos ---
+#define ONE_WIRE_BUS 2               // DS18B20 temperatura composto
+#define DHT_PIN 13                   // DHT11 temp/umidade ar
+#define DHT_TYPE DHT11
+#define ADC_HUMIDITY_PIN 34          // Sensor umidade capacitivo via ADC
+#define ADC_PH_PIN 35                // Sensor pH via ADC
+#define ADC_GAS_PIN 32               // MQ135 via ADC
+#define ADC_EC_PIN 33                // Sensor condutividade via ADC
+#define O2_SENSOR_PIN 36             // Sensor Oxigênio via ADC (conforme hardware)
+#define LOAD_CELL_SCK 18             // Célula de carga pinos (exemplo)
+#define LOAD_CELL_DT 19
+#define FAN_PIN 15                   // Ventilador
+#define PUMP_PIN 4                   // Bomba d'água
+#define SERVO_PIN 12                 // Motor servo (exemplo)
+#define LED_STATUS_PIN 27            // LED indicador status
+
+// --- Constantes e limites ---
+const float TEMP_MIN = 55.0;
+const float TEMP_MAX = 65.0;
+const float HUMIDITY_MIN = 40.0;
+const float HUMIDITY_MAX = 60.0;
+const float PH_MIN = 6.5;
+const float PH_MAX = 8.0;
+const int GAS_THRESHOLD = 350;
+const int EC_MAX = 2000;            // Exemplo valor máximo para EC
+
+// MQTT
+const char* WIFI_SSID = "SeuSSID";
+const char* WIFI_PASSWORD = "SuaSenha";
+const char* MQTT_SERVER = "broker.hivemq.com";
+const int MQTT_PORT = 1883;
+
+// Objetos sensores e atuadores
+OneWire oneWire(ONE_WIRE_BUS);
+DallasTemperature tempSensor(&oneWire);
+DHT dht(DHT_PIN, DHT_TYPE);
+Adafruit_ADS1115 ads;               // ADC para sensores analógicos adicionais
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+VL53L0X tofSensor;
+
+WiFiClient espClient;
+PubSubClient mqttClient(espClient);
+
+// Variáveis para controle de tempo
+unsigned long lastSensorRead = 0;
+const unsigned long SENSOR_INTERVAL = 3000; // Tempo entre leituras em ms
+
+// Funções auxiliar
+float movingAverage(float newValue, float* samples, int size);
+float readCapacitiveHumidity();
+float readPH();
+int readGas();
+int readEC();
+float readOxygen();
+float readLoadCell();
+uint16_t readToFDistance();
+
+void setupWiFi();
+void reconnectMQTT();
+void publishSensorData();
+
+void setup() {
+  Serial.begin(115200);
+
+  // Setup sensores e atuadores
+  pinMode(FAN_PIN, OUTPUT);
+  pinMode(PUMP_PIN, OUTPUT);
+  pinMode(LED_STATUS_PIN, OUTPUT);
+  digitalWrite(FAN_PIN, LOW);
+  digitalWrite(PUMP_PIN, LOW);
+  digitalWrite(LED_STATUS_PIN, LOW);
+
+  lcd.init();
+  lcd.backlight();
+  lcd.clear();
+  lcd.print("Iniciando...");
+
+  tempSensor.begin();
+  dht.begin();
+
+  Wire.begin();
+
+  if (!ads.begin()) {
+    Serial.println("Falha ao iniciar ADS1115");
+  }
+
+  if (!tofSensor.init()) {
+    Serial.println("Falha ao iniciar sensor ToF");
+  }
+  tofSensor.setTimeout(500);
+  tofSensor.startContinuous();
+
+  setupWiFi();
+
+  mqttClient.setServer(MQTT_SERVER, MQTT_PORT);
+
+  lcd.clear();
+  lcd.print("Sistema pronto");
+}
+
+// Buffers para média móvel
+const int MA_SIZE = 10;
+float tempSamples[MA_SIZE] = {0};
+float humSamples[MA_SIZE] = {0};
+float phSamples[MA_SIZE] = {0};
+float gasSamples[MA_SIZE] = {0};
+
+void loop() {
+  if (!mqttClient.connected()) {
+    reconnectMQTT();
+  }
+  mqttClient.loop();
+
+  unsigned long now = millis();
+
+  if (now - lastSensorRead >= SENSOR_INTERVAL) {
+    lastSensorRead = now;
+
+    // Leitura sensores
+    tempSensor.requestTemperatures();
+    float tempRaw = tempSensor.getTempCByIndex(0);
+    float temp = movingAverage(tempRaw, tempSamples, MA_SIZE);
+
+    float humRaw = dht.readHumidity();
+    float hum = movingAverage(humRaw, humSamples, MA_SIZE);
+
+    float phRaw = readPH();
+    float ph = movingAverage(phRaw, phSamples, MA_SIZE);
+
+    int gasRaw = readGas();
+    float gas = movingAverage((float)gasRaw, gasSamples, MA_SIZE);
+
+    int ec = readEC();
+    float oxygen = readOxygen();
+    float distance = (float)readToFDistance();
+    float loadCellWeight = readLoadCell();
+
+    // Controle atuadores
+    bool fanOn = false;
+    bool pumpOn = false;
+
+    if (temp > TEMP_MAX || gas > GAS_THRESHOLD || oxygen < 18.0) {
+      digitalWrite(FAN_PIN, HIGH);
+      fanOn = true;
+    } else if (temp < TEMP_MIN && gas < GAS_THRESHOLD) {
+      digitalWrite(FAN_PIN, LOW);
+      fanOn = false;
+    }
+
+    if (hum < HUMIDITY_MIN) {
+      digitalWrite(PUMP_PIN, HIGH);
+      pumpOn = true;
+    } else if (hum > HUMIDITY_MAX) {
+      digitalWrite(PUMP_PIN, LOW);
+      pumpOn = false;
+    }
+
+    // Alertas
+    if (ph < PH_MIN || ph > PH_MAX) {
+      mqttClient.publish("compostech/alert/ph", "pH fora do ideal");
+      digitalWrite(LED_STATUS_PIN, HIGH);
+    } else if (gas > GAS_THRESHOLD) {
+      mqttClient.publish("compostech/alert/gas", "Alta concentração de gases nocivos");
+      digitalWrite(LED_STATUS_PIN, HIGH);
+    } else {
+      digitalWrite(LED_STATUS_PIN, LOW);
+    }
+
+    // Publicação MQTT
+    char msg[64];
+    snprintf(msg, sizeof(msg), "%.2f", temp);
+    mqttClient.publish("compostech/data/temperature", msg);
+    snprintf(msg, sizeof(msg), "%.2f", hum);
+    mqttClient.publish("compostech/data/humidity", msg);
+    snprintf(msg, sizeof(msg), "%.2f", ph);
+    mqttClient.publish("compostech/data/ph", msg);
+    snprintf(msg, sizeof(msg), "%d", gasRaw);
+    mqttClient.publish("compostech/data/gas", msg);
+    snprintf(msg, sizeof(msg), "%d", ec);
+    mqttClient.publish("compostech/data/ec", msg);
+    snprintf(msg, sizeof(msg), "%.2f", oxygen);
+    mqttClient.publish("compostech/data/oxygen", msg);
+    snprintf(msg, sizeof(msg), "%.2f", distance);
+    mqttClient.publish("compostech/data/distance", msg);
+    snprintf(msg, sizeof(msg), "%.2f", loadCellWeight);
+    mqttClient.publish("compostech/data/weight", msg);
+
+    // Atualiza LCD
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.printf("T:%.1fC H:%.0f%%", temp, hum);
+    lcd.setCursor(0, 1);
+    lcd.printf("pH:%.2f Gas:%d", ph, gasRaw);
+
+    Serial.printf("T: %.2f C, H: %.2f%%, pH: %.2f, Gas: %d, EC: %d, O2: %.2f, Dist: %.2f mm, Peso: %.2f kg\n",
+                  temp, hum, ph, gasRaw, ec, oxygen, distance, loadCellWeight);
+  }
+}
+
+// --- Função média móvel ---
+float movingAverage(float newValue, float* samples, int size) {
+  static int index = 0;
+  static int count = 0;
+
+  samples[index] = newValue;
+  index = (index + 1) % size;
+  if (count < size) count++;
+
+  float sum = 0.0;
+  for (int i = 0; i < count; i++) {
+    sum += samples[i];
+  }
+  return sum / count;
+}
+
+// --- Funções de leitura dos sensores ---
+
+float readPH() {
+  int raw = analogRead(ADC_PH_PIN);
+  float voltage = (raw / 4095.0) * 3.3;
+  // Ajustar calibração conforme sensor real
+  float phValue = 7 + ((2.5 - voltage) * 3);
+  return constrain(phValue, 0.0, 14.0);
+}
+
+int readGas() {
+  int raw = analogRead(ADC_GAS_PIN);
+  return raw; // Ajuste para PPB ou ppm se necessário
+}
+
+int readEC() {
+  int raw = analogRead(ADC_EC_PIN);
+  return raw; // Ajuste calibração conforme sensor real
+}
+
+float readOxygen() {
+  int raw = analogRead(O2_SENSOR_PIN);
+  float voltage = (raw / 4095.0) * 3.3;
+  // Converter para concentração de oxigênio conforme calibração
+  float oxygenPercent = (voltage / 3.3) * 21.0; // Exemplo
+  return oxygenPercent;
+}
+
+float readCapacitiveHumidity() {
+  int raw = analogRead(ADC_HUMIDITY_PIN);
+  // exemplo de calibração com valores brutos
+  int dryVal = 4095;
+  int wetVal = 2048;
+  float humidity = map(raw, dryVal, wetVal, 0, 100);
+  humidity = constrain(humidity, 0, 100);
+  return humidity;
+}
+
+// Placeholder, substituir por leitura real da célula de carga
+float readLoadCell() {
+  // Código específico do HX711 ou outro módulo deve ser implementado
+  return 0.0;
+}
+
+uint16_t readToFDistance() {
+  return tofSensor.readRangeContinuousMillimeters();
+}
+
+void setupWiFi() {
+  delay(10);
+  Serial.println("Conectando ao WiFi...");
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("WiFi conectado");
+  Serial.print("IP: ");
+  Serial.println(WiFi.localIP());
+}
+
+void reconnectMQTT() {
+  while (!mqttClient.connected()) {
+    Serial.print("Conectando ao MQTT...");
+    if (mqttClient.connect("CompostechUnit01")) {
+      Serial.println("conectado");
+    } else {
+      Serial.print("falha rc=");
+      Serial.print(mqttClient.state());
+      Serial.println(" tentando novamente em 5s");
+      delay(5000);
+    }
+  }
+}
