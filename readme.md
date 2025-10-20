@@ -1,52 +1,56 @@
-# Compostech — Sistema Inteligente de Monitoramento e Automação de Compostagem
+Compostech Bio Solutions
+Visão Geral
+Compostech é um sistema integrado para compostagem automatizada e inteligente, combinando firmware embarcado em microcontrolador, conectividade IoT via MQTT, backend web em Flask e interface de dashboard web. O objetivo é otimizar o processo de compostagem reduzindo odores, acelerando o ciclo biológico e fornecendo dados auditáveis para usuários e gestão ambiental com estatísticas e alertas em tempo real.
 
-O **Compostech** é um sistema integrado de monitoramento ambiental desenvolvido para medir **umidade** e **temperatura** de compostagem orgânica em tempo real.  
-Combina **sensores físicos (Arduino + YL-69 + ADS1115)**, **broker MQTT**, **API Flask**, e **dashboard web interativo** para visualização e controle remoto.
+Estrutura do Sistema
+Firmware (ESP32/STM32)
+Monitora sensores de temperatura (DS18B20), umidade (capacitivo), pH (analógico) e gás (MQ135).
 
-## Arquitetura do Sistema
+Controla ventilador e bomba de irrigação automaticamente conforme variáveis ambientais.
 
-### Camadas principais
+Publica dados e alertas via MQTT ao broker configurado.
 
-| Camada | Componente | Função |
-|--------|-------------|--------|
-| 1. Física (Hardware) | `Sensor YL-69 + ADS1115` | Captura da umidade real do composto. |
-| 2. Coleta (Gateway) | `dashboard.py` | Lê dados via Serial e publica em MQTT. |
-| 3. Backend (Servidor Flask) | `app.py` + `data_source.py` | Fornece API REST e serve o dashboard. |
-| 4. Armazenamento Local | `data.json` | Registra leituras de sensores. |
-| 5. Interface Web | `dashboard.html` | Exibe gráficos e status em tempo real. |
+Implementação robusta de média móvel para filtragem e watchdog timer para estabilidade.
 
+Backend (Flask - app.py + data_source.py)
+Executa servidor web que expos dados da compostagem via APIs REST.
 
-## Instalação e Execução
+Consome mensagens MQTT em uma thread dedicada atualizando estado global protegido por lock.
 
-### Requisitos
+Fornece endpoints para leitura de dados sensoriais e gerenciamento de alertas.
 
-- Python 3.7+
-- Arduino IDE
-- Broker MQTT (ex: Mosquitto)
-- Navegador moderno (Chrome/Edge/Firefox)
+O módulo data_source.py abstrai operações de dados garantindo segurança e consistência.
 
----
+Dashboard Web (dashboard.html)
+Página responsiva para visualização em tempo real dos dados dos sensores.
 
-### 1. Configuração do Arduino
+Atualização periódica por fetch API aos endpoints do backend.
 
-1. Abra o arquivo [`hardware/Sensor-umidade-YL-69.cpp`](hardware/Sensor-umidade-YL-69.cpp) na **Arduino IDE**.
-2. Conecte o sensor YL-69 ao módulo **ADS1115**:
-   - A0 → Saída do YL-69  
-   - SDA → A4  
-   - SCL → A5  
-   - VCC → 3.3V  
-   - GND → GND
-3. Faça o upload do código para a placa (Arduino Uno ou compatível).
-4. Teste a leitura no **Monitor Serial** (9600 baud).
+Visualiza alertas em lista clara, com botão para limpeza manual.
 
----
+Indica último horário de atualização para controle e transparência.
 
-### 2. Configuração do Gateway MQTT
+Como Executar
+Configure credenciais Wi-Fi e broker MQTT no firmware e backend.
 
-O arquivo [`backend/dashboard.py`](backend/dashboard.py) lê dados da porta serial e publica via MQTT.
+Compile e execute o firmware no ESP32/STM32, garantindo conexão Wi-Fi.
 
-#### Ajuste a porta serial:
-```python
+Execute o backend Flask (app.py) para iniciar o servidor web e thread MQTT.
 
-SERIAL_PORT = '/dev/ttyACM0'  # Ajuste conforme seu sistema
+Acesse o dashboard no browser pelo endereço do servidor para monitorar em tempo real.
 
+Boas Práticas
+Separação clara de responsabilidades entre firmware (publicação MQTT), backend (subscrição MQTT + API REST) e front-end (consumo API).
+
+Uso de locks para evitar condições de corrida.
+
+Filtros simples para garantir qualidade dos dados sensoriais.
+
+Atualizações assíncronas para garantir desempenho e responsividade.
+
+Design modular e extensível para integrar futuros sensores, atuadores e funções analíticas.
+
+Contato e Contribuição
+Projeto aberto para contribuições e melhorias. Para dúvidas, sugestões ou parcerias, contate o time Compostech pelo e-mail suporte@compostech.bio.
+
+Este README apresenta a visão integrada, as camadas do sistema e instruções essenciais para desenvolvimento, operação e manutenção do Compostech Bio Solutions, garantindo eficiência, transparência e sustentabilidade em compostagem inteligente.
