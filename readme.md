@@ -1,51 +1,120 @@
-Compostech Bio Solutions
-Visão Geral
-Compostech é um sistema integrado para compostagem automatizada e inteligente, combinando firmware embarcado em microcontrolador, conectividade IoT via MQTT, backend web em Flask e interface de dashboard web. O objetivo é otimizar o processo de compostagem reduzindo odores, acelerando o ciclo biológico e fornecendo dados auditáveis para usuários e gestão ambiental com estatísticas e alertas em tempo real.
+Compostech Bio Solutions ♻️
+Sistema integrado para compostagem automatizada e inteligente que combina hardware embarcado, conectividade IoT e dashboard web para otimizar o processo de compostagem.
 
-Estrutura do Sistema
-Firmware (ESP32/STM32)
-Monitora sensores de temperatura (DS18B20), umidade (capacitivo), pH (analógico) e gás (MQ135).
+📋 Visão Geral
+O Compostech é uma solução completa que monitora e controla automaticamente o processo de compostagem através de:
 
-Controla ventilador e bomba de irrigação automaticamente conforme variáveis ambientais.
+Redução de odores através de controle ambiental preciso
 
-Publica dados e alertas via MQTT ao broker configurado.
+Aceleração do ciclo biológico com condições otimizadas
 
-Implementação robusta de média móvel para filtragem e watchdog timer para estabilidade.
+Monitoramento em tempo real com dados auditáveis
 
-Backend (Flask - app.py + data_source.py)
-Executa servidor web que expos dados da compostagem via APIs REST.
+Alertas proativos para manutenção preventiva
 
-Consome mensagens MQTT em uma thread dedicada atualizando estado global protegido por lock.
+🏗️ Arquitetura do Sistema
+🔧 Firmware (ESP32/STM32)
+Monitoramento: Sensores de temperatura (DS18B20), umidade (capacitivo), pH (analógico) e gás (MQ135)
 
-Fornece endpoints para leitura de dados sensoriais e gerenciamento de alertas.
+Controle: Ventilador e bomba de irrigação automáticos
 
-O módulo data_source.py abstrai operações de dados garantindo segurança e consistência.
+Conectividade: Publicação de dados via MQTT
 
-Dashboard Web (dashboard.html)
-Página responsiva para visualização em tempo real dos dados dos sensores.
+Robustez: Média móvel para filtragem e watchdog timer
 
-Atualização periódica por fetch API aos endpoints do backend.
+⚙️ Backend (Flask)
+API REST: Endpoints para dados sensoriais e gestão de alertas
 
-Visualiza alertas em lista clara, com botão para limpeza manual.
+MQTT Client: Thread dedicada para consumo de mensagens
 
-Indica último horário de atualização para controle e transparência.
+Segurança: Locks para proteção de estado global
 
-Como Executar
-Configure credenciais Wi-Fi e broker MQTT no firmware e backend.
+Módulos:
 
-Compile e execute o firmware no ESP32/STM32, garantindo conexão Wi-Fi.
+app.py: Servidor web principal
 
-Execute o backend Flask (app.py) para iniciar o servidor web e thread MQTT.
+data_source.py: Abstração de operações de dados
 
-Acesse o dashboard no browser pelo endereço do servidor para monitorar em tempo real.
+🖥️ Dashboard Web
+Interface Responsiva: Visualização em tempo real
 
-Boas Práticas
-Separação clara de responsabilidades entre firmware (publicação MQTT), backend (subscrição MQTT + API REST) e front-end (consumo API).
+Atualização Automática: Fetch API periódico
 
-Uso de locks para evitar condições de corrida.
+Gestão de Alertas: Lista clara com opção de limpeza
 
-Filtros simples para garantir qualidade dos dados sensoriais.
+Transparência: Indicador de último horário de atualização
 
-Atualizações assíncronas para garantir desempenho e responsividade.
+🚀 Como Executar
+1. Configuração do Firmware
+cpp
+// Configure no código:
+const char* WIFI_SSID = "sua_rede";
+const char* WIFI_PASS = "sua_senha";
+const char* MQTT_BROKER = "seu_broker";
+2. Instalação do Backend
+bash
+# Clone o repositório
+git clone https://github.com/compostech/bio-solutions.git
+cd bio-solutions
 
-Design modular e extensível para integrar futuros sensores, atuadores e funções analíticas.
+# Instale dependências
+pip install -r requirements.txt
+
+# Configure variáveis de ambiente
+export MQTT_BROKER="seu_broker"
+export MQTT_TOPIC="compostech/data"
+
+# Execute o servidor
+python app.py
+3. Acesso ao Dashboard
+Abra o navegador e acesse: http://localhost:5000
+
+📁 Estrutura do Projeto
+text
+compostech-bio-solutions/
+├── firmware/
+│   ├── src/
+│   │   ├── main.cpp
+│   │   ├── sensors.h
+│   │   └── mqtt_client.h
+│   └── platformio.ini
+├── backend/
+│   ├── app.py
+│   ├── data_source.py
+│   ├── requirements.txt
+│   └── config.py
+├── web/
+│   └── dashboard.html
+└── README.md
+🛠️ Tecnologias Utilizadas
+Hardware: ESP32/STM32, DS18B20, MQ135, sensores capacitivos
+
+Firmware: C++ (PlatformIO/Arduino)
+
+Backend: Python, Flask, Paho-MQTT
+
+Frontend: HTML5, CSS3, JavaScript (Fetch API)
+
+Protocolos: MQTT, HTTP/REST
+
+✅ Boas Práticas Implementadas
+Separação de Responsabilidades: Firmware (publicação), Backend (subscrição + API), Frontend (consumo)
+
+Concorrência Segura: Locks para evitar race conditions
+
+Qualidade de Dados: Filtros para dados sensoriais
+
+Performance: Atualizações assíncronas
+
+Manutenibilidade: Design modular e extensível
+
+🔮 Roadmap
+Integração de mais sensores (CO2, NH3)
+
+Machine Learning para otimização de parâmetros
+
+App móvel nativo
+
+Relatórios PDF automáticos
+
+Integração com APIs de gestão ambiental
