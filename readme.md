@@ -49,8 +49,3 @@ Filtros simples para garantir qualidade dos dados sensoriais.
 Atualizações assíncronas para garantir desempenho e responsividade.
 
 Design modular e extensível para integrar futuros sensores, atuadores e funções analíticas.
-
-Contato e Contribuição
-Projeto aberto para contribuições e melhorias. Para dúvidas, sugestões ou parcerias, contate o time Compostech pelo e-mail suporte@compostech.bio.
-
-Este README apresenta a visão integrada, as camadas do sistema e instruções essenciais para desenvolvimento, operação e manutenção do Compostech Bio Solutions, garantindo eficiência, transparência e sustentabilidade em compostagem inteligente.
