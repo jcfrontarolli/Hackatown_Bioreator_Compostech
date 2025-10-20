@@ -45,17 +45,12 @@ Gestão de Alertas: Lista clara com opção de limpeza
 Transparência: Indicador de último horário de atualização
 
 🚀 Como Executar
-1. Configuração do Firmware
+Configuração do Firmware
 cpp
 // Configure no código:
 const char* WIFI_SSID = "sua_rede";
 const char* WIFI_PASS = "sua_senha";
 const char* MQTT_BROKER = "seu_broker";
-2. Instalação do Backend
-bash
-# Clone o repositório
-git clone https://github.com/compostech/bio-solutions.git
-cd bio-solutions
 
 # Instale dependências
 pip install -r requirements.txt
@@ -66,7 +61,7 @@ export MQTT_TOPIC="compostech/data"
 
 # Execute o servidor
 python app.py
-3. Acesso ao Dashboard
+ Acesso ao Dashboard
 Abra o navegador e acesse: http://localhost:5000
 
 📁 Estrutura do Projeto
