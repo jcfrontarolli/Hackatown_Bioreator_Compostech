@@ -2,96 +2,114 @@
 <html lang="pt-br">
 <head>
   <meta charset="utf-8" />
-  <title>Dashboard de Sensores</title>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <style>
-    body { font-family: sans-serif; margin: 20px; }
-    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-    canvas { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 10px; }
-  </style>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Compostech Dashboard</title>
+<style>
+  body { font-family: Arial, sans-serif; margin: 0; padding: 0; background: #f4f7f8; color: #333; }
+  header { background: #4CAF50; color: white; padding: 1rem; text-align: center; font-size: 1.5rem; }
+  main { max-width: 900px; margin: 2rem auto; padding: 1rem; background: white; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1);}
+  section { margin-bottom: 2rem; }
+  h2 { color: #4CAF50; }
+  .sensor-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 1rem; }
+  .sensor-card { background: #e7f3e7; border-radius: 6px; padding: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); text-align: center; }
+  .sensor-value { font-size: 2rem; font-weight: bold; margin-top: 0.5rem; }
+  .alert-list { list-style: none; padding-left: 0; }
+  .alert-item { background: #ffdddd; border-left: 5px solid #f44336; margin-bottom: 0.5rem; padding: 0.5rem 1rem; border-radius: 4px; color: #a94442; }
+  button { background: #4CAF50; border: none; padding: 0.5rem 1rem; border-radius: 4px; color: white; font-size: 1rem; cursor: pointer; }
+  button:hover { background: #45a049; }
+  #last-updated { font-size: 0.9rem; color: #777; text-align: right; }
+</style>
 </head>
 <body>
-  <h1>Dashboard de Sensores</h1>
-  <div class="grid">
-    <canvas id="chartUmidade"></canvas>
-    <canvas id="chartTemperatura"></canvas>
-  </div>
+<header>Compostech Bio Solutions - Dashboard</header>
+<main>
+  <section aria-label="Sensor Readings">
+    <h2>Sensores em Tempo Real</h2>
+    <div class="sensor-grid">
+      <div class="sensor-card" id="temp-card">
+        <div>Temperatura</div>
+        <div class="sensor-value" id="temperature">-- °C</div>
+      </div>
+      <div class="sensor-card" id="hum-card">
+        <div>Umidade</div>
+        <div class="sensor-value" id="humidity">-- %</div>
+      </div>
+      <div class="sensor-card" id="ph-card">
+        <div>pH</div>
+        <div class="sensor-value" id="ph">--</div>
+      </div>
+      <div class="sensor-card" id="gas-card">
+        <div>Concentração de Gás</div>
+        <div class="sensor-value" id="gas">-- ppm</div>
+      </div>
+    </div>
+    <div id="last-updated">Última atualização: --</div>
+  </section>
 
-  <script>
-    let chartUmidade, chartTemperatura;
+  <section aria-label="Alerts">
+    <h2>Alertas</h2>
+    <ul class="alert-list" id="alert-list">
+      <li>Nenhum alerta</li>
+    </ul>
+    <button id="clear-alerts-btn" aria-label="Limpar Alertas">Limpar Alertas</button>
+  </section>
+</main>
 
-    async function fetchDados() {
-      const res = await fetch("/data");
-      if (!res.ok) throw new Error("Falha ao buscar dados");
-      return await res.json();
-    }
+<script>
+  // Atualiza valores no dashboard
+  function updateDashboard(data) {
+    document.getElementById('temperature').textContent = data.temperature !== null ? data.temperature.toFixed(2) + ' °C' : '-- °C';
+    document.getElementById('humidity').textContent = data.humidity !== null ? data.humidity.toFixed(2) + ' %' : '-- %';
+    document.getElementById('ph').textContent = data.ph !== null ? data.ph.toFixed(2) : '--';
+    document.getElementById('gas').textContent = data.gas !== null ? data.gas + ' ppm' : '-- ppm';
 
-    function initCharts(dados) {
-      const labels = dados.tempo;
-
-      const ctxUmi = document.getElementById("chartUmidade").getContext("2d");
-      chartUmidade = new Chart(ctxUmi, {
-        type: "line",
-        data: {
-          labels,
-          datasets: [{
-            label: "Umidade (%)",
-            data: dados.umidade,
-            borderColor: "green",
-            backgroundColor: "rgba(0,128,0,0.1)",
-            tension: 0.2
-          }]
-        },
-        options: {
-          responsive: true,
-          scales: { y: { beginAtZero: true } }
-        }
+    const alertList = document.getElementById('alert-list');
+    alertList.innerHTML = '';
+    if (data.alerts && data.alerts.length > 0) {
+      data.alerts.forEach(alert => {
+        let li = document.createElement('li');
+        li.textContent = alert;
+        li.className = 'alert-item';
+        alertList.appendChild(li);
       });
-
-      const ctxTemp = document.getElementById("chartTemperatura").getContext("2d");
-      chartTemperatura = new Chart(ctxTemp, {
-        type: "line",
-        data: {
-          labels,
-          datasets: [{
-            label: "Temperatura (°C)",
-            data: dados.temperatura,
-            borderColor: "red",
-            backgroundColor: "rgba(255,0,0,0.1)",
-            tension: 0.2
-          }]
-        },
-        options: {
-          responsive: true,
-          scales: { y: { beginAtZero: false } }
-        }
-      });
+    } else {
+      let li = document.createElement('li');
+      li.textContent = 'Nenhum alerta';
+      alertList.appendChild(li);
     }
 
-    function updateCharts(dados) {
-      chartUmidade.data.labels = dados.tempo;
-      chartUmidade.data.datasets[0].data = dados.umidade;
-      chartUmidade.update();
+    document.getElementById('last-updated').textContent = `Última atualização: ${new Date().toLocaleTimeString()}`;
+  }
 
-      chartTemperatura.data.labels = dados.tempo;
-      chartTemperatura.data.datasets[0].data = dados.temperatura;
-      chartTemperatura.update();
+  // Busca dados via API e atualiza dashboard
+  async function fetchDataAndUpdate() {
+    try {
+      const response = await fetch('/api/sensordata');
+      if (!response.ok) throw new Error('Erro ao buscar dados');
+      const data = await response.json();
+      updateDashboard(data);
+    } catch (err) {
+      console.error('Falha na atualização:', err);
     }
+  }
 
-    async function start() {
-      const dados = await fetchDados();
-      initCharts(dados);
-      setInterval(async () => {
-        try {
-          const novos = await fetchDados();
-          updateCharts(novos);
-        } catch (e) {
-          console.error(e);
-        }
-      }, 5000);
+  // Limpa alertas via API
+  async function clearAlerts() {
+    try {
+      const response = await fetch('/api/clearalerts', { method: 'POST' });
+      if (!response.ok) throw new Error('Erro ao limpar alertas');
+      fetchDataAndUpdate(); // Atualizar após limpeza
+    } catch (err) {
+      console.error('Falha ao limpar alertas:', err);
     }
+  }
 
-    start();
-  </script>
+  document.getElementById('clear-alerts-btn').addEventListener('click', clearAlerts);
+
+  // Atualiza a cada 5 segundos
+  setInterval(fetchDataAndUpdate, 5000);
+  // Atualiza imediatamente na carga
+  fetchDataAndUpdate();
+</script>
 </body>
 </html>
