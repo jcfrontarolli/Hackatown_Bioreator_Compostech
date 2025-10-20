@@ -1,0 +1,161 @@
+#include <WiFi.h>
+#include <PubSubClient.h>
+#include <OneWire.h>
+#include <DallasTemperature.h>
+#include <DHT.h>
+#include <Adafruit_ADS1X15.h>
+#include <LiquidCrystal_I2C.h>
+#include <Wire.h>
+#include <VL53L0X.h>
+
+// --- Definições pinos ---
+#define ONE_WIRE_BUS 2               // DS18B20 temperatura composto
+#define DHT_PIN 13                   // DHT11 temp/umidade ar
+#define FAN_PIN 15                   // Ventilador
+#define PUMP_PIN 4                   // Bomba d'água
+#define LED_STATUS_PIN 27            // LED indicador status
+
+// ADS1115 canais para sensores analógicos
+#define ADS_CHANNEL_HUMIDITY 0
+#define ADS_CHANNEL_PH 1
+#define ADS_CHANNEL_GAS 2
+#define ADS_CHANNEL_EC 3
+
+// Outros sensores que usam ADC interno ou digital:
+// Sensor Oxigênio, célula de carga e outros podem permanecer conforme implementação específica
+
+// --- Constantes e limites ---
+const float TEMP_MIN = 55.0;
+const float TEMP_MAX = 65.0;
+const float HUMIDITY_MIN = 40.0;
+const float HUMIDITY_MAX = 60.0;
+const float PH_MIN = 6.5;
+const float PH_MAX = 8.0;
+const int GAS_THRESHOLD = 350;
+const int EC_MAX = 2000;            // Exemplo valor máximo para EC
+
+// MQTT e WiFi
+const char* WIFI_SSID = "SeuSSID";
+const char* WIFI_PASSWORD = "SuaSenha";
+const char* MQTT_SERVER = "broker.hivemq.com";
+const int MQTT_PORT = 1883;
+
+// Objetos sensores e atuadores
+OneWire oneWire(ONE_WIRE_BUS);
+DallasTemperature tempSensor(&oneWire);
+DHT dht(DHT_PIN, DHT11);
+Adafruit_ADS1115 ads;
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+VL53L0X tofSensor;
+
+WiFiClient espClient;
+PubSubClient mqttClient(espClient);
+
+// ...
+
+void setup() {
+  Serial.begin(115200);
+
+  // Inicializa pinos atuadores
+  pinMode(FAN_PIN, OUTPUT);
+  pinMode(PUMP_PIN, OUTPUT);
+  pinMode(LED_STATUS_PIN, OUTPUT);
+  digitalWrite(FAN_PIN, LOW);
+  digitalWrite(PUMP_PIN, LOW);
+  digitalWrite(LED_STATUS_PIN, LOW);
+
+  lcd.init();
+  lcd.backlight();
+  lcd.clear();
+  lcd.print("Iniciando...");
+
+  // Sensores digitais
+  tempSensor.begin();
+  dht.begin();
+
+  Wire.begin();
+
+  // Inicializa ADS1115
+  if (!ads.begin()) {
+    Serial.println("Falha ao iniciar ADS1115");
+    while (1);
+  }
+  ads.setGain(GAIN_ONE); // 4.096V full scale range
+
+  // Inicializa sensor VL53L0X ToF
+  if (!tofSensor.init()) {
+    Serial.println("Falha ao iniciar sensor ToF");
+    while (1);
+  }
+  tofSensor.setTimeout(500);
+  tofSensor.startContinuous();
+
+  setupWiFi();
+
+  mqttClient.setServer(MQTT_SERVER, MQTT_PORT);
+
+  lcd.clear();
+  lcd.print("Sistema pronto");
+}
+
+// Leitura do sensor via ADS1115
+int16_t readADC(int channel) {
+  return ads.readADC_SingleEnded(channel);
+}
+
+// Exemplos de leitura dos sensores analógicos com ADS1115
+float readHumidity() {
+  int16_t raw = readADC(ADS_CHANNEL_HUMIDITY);
+  // Calibrar com valores reais do sensor
+  int dryVal = 25000; // exemplo
+  int wetVal = 12000; // exemplo
+  float hum = map(raw, dryVal, wetVal, 0, 100);
+  return constrain(hum, 0, 100);
+}
+
+float readPH() {
+  int16_t raw = readADC(ADS_CHANNEL_PH);
+  float voltage = (raw / 32767.0) * 4.096; // ADS1115 16-bit range com ganho 1
+  float phVal = 7 + ((2.5 - voltage) * 3);  // calibrar conforme sensor
+  return constrain(phVal, 0, 14);
+}
+
+int readGas() {
+  int16_t raw = readADC(ADS_CHANNEL_GAS);
+  return raw;
+}
+
+int readEC() {
+  int16_t raw = readADC(ADS_CHANNEL_EC);
+  return raw;
+}
+
+// Restante do código permanece similar: leitura sensores digitais, controle atuadores,
+// publicação MQTT, atualização LCD e controle do loop
+
+// Exemplo parcial da loop para leitura:
+void loop() {
+  if (!mqttClient.connected())
+    reconnectMQTT();
+  mqttClient.loop();
+
+  unsigned long now = millis();
+  if (now - lastSensorRead >= SENSOR_INTERVAL) {
+    lastSensorRead = now;
+
+    // Leitura sensores digitais
+    tempSensor.requestTemperatures();
+    float temp = tempSensor.getTempCByIndex(0);
+    float humAir = dht.readHumidity();
+
+    // Leitura sensores analógicos via ADS1115
+    float humSoil = readHumidity();
+    float ph = readPH();
+    int gas = readGas();
+    int ec = readEC();
+
+    // Controle de atuadores e outras ações seguem como antes
+
+    // Publicação, atualizações etc...
+  }
+}
